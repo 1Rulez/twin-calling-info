@@ -10,31 +10,15 @@ phone_number_pattern = r"^7\d{1,14}$"
 class AdditionalModel(BaseModel):
     fullListMethod: str = "reject"
     fullListTime: int = 0
-    useTr: bool = True
-    allowCallTimeFrom: str = "32401"
-    allowCallTimeTo: str = "75599"
+    useTr: bool = False
     recordCall: bool = True
     recTrimLeft: int = 0
     detectRobot: bool = False
     providerId: int | None = None
 
 
-class RedialCountOptions(BaseModel):
-    redial: bool
-    count: int
-
-
-class RedialCountTimeOptions(RedialCountOptions):
-    time: int
-
-
 class RedialStrategy(BaseModel):
     redialStrategyEn: bool = False
-    # busy: RedialCountTimeOptions = RedialCountTimeOptions(redial=True, count=3, time=3600)
-    # noAnswer: RedialCountTimeOptions = RedialCountTimeOptions(redial=True, count=3, time=3600)
-    # answerMash: RedialCountTimeOptions = RedialCountTimeOptions(redial=False, count=1, time=1)
-    # congestion: RedialCountTimeOptions = RedialCountTimeOptions(redial=False, count=1, time=1)
-    # answerNoList: RedialCountTimeOptions = RedialCountTimeOptions(redial=True, count=3, time=3600)
 
 
 class CreateCallModel(BaseModel):
