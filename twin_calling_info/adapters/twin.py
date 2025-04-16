@@ -44,7 +44,6 @@ class TwinRepository:
         headers = {'Content-Type': 'application/json', "Authorization": f"Bearer {token}"}
         async with aiohttp.ClientSession() as session:
             async with session.post(self.send_contacts_url, headers=headers, json=contacts_data) as response:
-                response.raise_for_status()
                 self.logger.info(response)
                 if response.status == 422:
                     self.redis.del_key(task_key)

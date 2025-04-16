@@ -1,36 +1,46 @@
 from datetime import timedelta
+from fastapi import APIRouter, BackgroundTasks
 
-from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Response
 
-from twin_calling_info.api.crud import get_contacts, get_twin_repo, get_redis_cli, send_contacts, get_call_statistic_info
+from twin_calling_info.api.crud import (
+    get_contacts,
+    get_twin_repo,
+    get_redis_cli,
+    send_contacts,
+    get_call_statistic_info,
+    background_request
+)
 from twin_calling_info.configuration import Request
 from twin_calling_info.api.input_models import InputCallEnd
 from twin_calling_info.adapters.telegram import Telegram
 
 operation_router = APIRouter()
 
+
 def get_session(request: Request) -> AsyncSession:
     return AsyncSession(bind=request.app.container.database_engine)
 
 
 @operation_router.post("/send_call")
-async def send_call(request: Request) -> Response:
+async def send_call(request: Request, phone: str = None) -> Response:
     """'Ручка' для отправки на обзвон"""
     redis_repo = get_redis_cli(request)
     twin_repo = get_twin_repo(request, redis_repo)
     webhook = request.app.container.settings.twin_webhook
     async with get_session(request) as session:
-        contacts = await get_contacts(session)
+        contacts = await get_contacts(session, phone)
         await send_contacts(contacts=contacts, twin=twin_repo, webhook=webhook)
     return Response()
 
+
 @operation_router.post("/sessions")
-async def add_session(event: InputCallEnd, request: Request) -> Response:
+async def add_session(event: InputCallEnd, request: Request, background_tasks: BackgroundTasks) -> Response:
     """'Ручка' для анализа данных звонка"""
     tg_token = request.app.container.settings.tg_token
     tg_chat_id = request.app.container.settings.tg_chat_id
+    print(f'event: \n{event}')
     if event.event == 'CALL_ENDED':
         if event.status and event.status != 'ANSWERED':
             message = \
@@ -41,6 +51,13 @@ f"""❗️❗️❗️
 Необходимо узнать причину
 """
             await Telegram(tg_token, tg_chat_id).send_telegram_message(message)
+
+            params = {
+                "phone": event.callTo.replace("+", ""),
+            }
+            delay = 300
+            url = request.app.container.settings.twin_webhook.replace("sessions", "send_call")
+            background_tasks.add_task(background_request, url, params, delay)
     return Response()
 
 
@@ -55,6 +72,3 @@ async def send_call_statistic_tg(request: Request) -> Response:
         message = f"""Количество звонков за сутки: {int(call_count)}"""
     await Telegram(tg_token, tg_chat_id).send_telegram_message(message)
     return Response()
-
-
-

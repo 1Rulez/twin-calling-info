@@ -1,4 +1,7 @@
+import aiohttp
+from asyncio import sleep
 from datetime import datetime, timedelta
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 
@@ -7,6 +10,7 @@ from twin_calling_info.adapters.twin import TwinRepository
 from twin_calling_info.configuration import Request
 from twin_calling_info.models import CalNumbers
 from twin_calling_info.shemas.create_call import CreateCallModel, SendContacts, Contact
+
 
 def get_redis_cli(request: Request) -> RedisStorage:
     redis_host = request.app.container.settings.redis_host
@@ -40,9 +44,12 @@ def get_twin_repo(request: Request, redis: RedisStorage) -> TwinRepository:
     return twin_operation
 
 
-async def get_contacts(session: AsyncSession) -> list[CalNumbers]:
+async def get_contacts(session: AsyncSession, phone: str | None = None) -> list[CalNumbers]:
     query = select(CalNumbers).where(CalNumbers.is_active.is_(True))
+    if phone:
+        query = query.where(CalNumbers.phone == phone)
     return (await session.execute(query)).scalars().all()
+
 
 def get_send_contact(data: list[CalNumbers]) -> SendContacts:
     send_cont = SendContacts()
@@ -63,6 +70,7 @@ def get_send_contact(data: list[CalNumbers]) -> SendContacts:
 class SendContactError(Exception):
     pass
 
+
 async def send_contacts(contacts: list[CalNumbers], twin: TwinRepository, webhook: str):
     if contacts:
         contacts_data = get_send_contact(contacts)
@@ -78,6 +86,7 @@ async def send_contacts(contacts: list[CalNumbers], twin: TwinRepository, webhoo
             f'Send contacts error: {contacts_data} \n response: {resp}'
         )
 
+
 async def get_call_statistic_info(session: AsyncSession):
     current_date = datetime.now().date()
     query = f"""
@@ -87,3 +96,11 @@ async def get_call_statistic_info(session: AsyncSession):
         and ci."startedAt" >= '{current_date}'
     """
     return (await session.execute(text(query))).scalar()
+
+
+async def background_request(url: str, params: dict, delay: int = 0):
+    await sleep(delay)
+    headers = {"accept": "application/json"}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, params=params) as response:
+            response.raise_for_status()
